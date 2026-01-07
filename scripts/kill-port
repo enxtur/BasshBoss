@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# kill-port - Force kill processes listening on given port(s)
+# Usage:
+#   kill-port 3000
+#   kill-port 3000 8080 5000
+#   kill-port 3000 8080   # multiple ports
+
+set -euo pipefail  # Better error handling
+
+if [[ $# -eq 0 ]]; then
+  echo "Error: No ports provided." >&2
+  echo "Usage: $(basename "$0") <port1> [port2] [port3] ..." >&2
+  exit 1
+fi
+
+PORTS=("$@")  # Capture all arguments as array
+FOUND_ANY=0
+
+for PORT in "${PORTS[@]}"; do
+  # Validate port number
+  if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+    echo "Warning: Invalid port '$PORT' — skipping." >&2
+    continue
+  fi
+
+  # Find PIDs listening on TCP (add -iudp if you want UDP too)
+  PIDS=$(lsof -ti:"$PORT" 2>/dev/null || true)
+
+  if [[ -z "$PIDS" ]]; then
+    echo "No processes found on port $PORT"
+    continue
+  fi
+
+  FOUND_ANY=1
+  echo "Killing processes on port $PORT (PIDs: $PIDS)"
+  echo "$PIDS" | xargs kill -9
+done
+
+if (( FOUND_ANY == 1 )); then
+  echo "All specified ports cleared."
+else
+  echo "No processes were running on the given ports."
+fi

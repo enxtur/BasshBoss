@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# gcb - Clean up local branches that have been merged into the current branch
+# Usage:
+#   gcb                  # dry-run: show branches that would be deleted
+#   gcb -f               # actually delete them
+#   gcb -f main          # target 'main' instead of current branch
+
+set -euo pipefail
+
+# Default target: current branch
+TARGET_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+FORCE=0
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -f|--force)
+      FORCE=1
+      shift
+      ;;
+    *)
+      TARGET_BRANCH="$1"
+      shift
+      ;;
+  esac
+done
+
+# Validate we're in a git repo
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Error: Not a git repository." >&2
+  exit 1
+fi
+
+# Fetch latest to avoid deleting branches that might not be fully merged remotely
+git fetch --prune >/dev/null 2>&1
+
+echo "Target branch: $TARGET_BRANCH"
+echo "Finding local branches fully merged into $TARGET_BRANCH..."
+echo
+
+# Get list of merged branches (exclude current, main/master/develop, and remote-tracking)
+MERGED_BRANCHES=$(git branch --merged "$TARGET_BRANCH" | grep -vE '^\*' | grep -vE "(main|master|develop|dev)$" | sed 's/^ *//')
+
+if [[ -z "$MERGED_BRANCHES" ]]; then
+  echo "No merged branches found to clean up. You're all tidy! ✨"
+  exit 0
+fi
+
+# Count them
+COUNT=$(echo "$MERGED_BRANCHES" | grep -c '^' || true)
+
+echo "Branches to be considered ($COUNT):"
+echo "$MERGED_BRANCHES" | sed 's/^/  - /'
+echo
+
+if [[ $FORCE -eq 0 ]]; then
+  echo "This is a dry run. To actually delete these branches, run:"
+  echo "    gcb -f $TARGET_BRANCH"
+else
+  echo "Deleting branches..."
+  echo "$MERGED_BRANCHES" | xargs -I {} git branch -d {}
+  echo ""
+  echo "Cleaned up $COUNT branch(es)! 🎉"
+fi

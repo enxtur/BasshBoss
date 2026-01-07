@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# git-wip - Quickly commit all changes as "WIP" (Work In Progress)
+# Usage:
+#   git-wip              # commit with message "WIP: quick save"
+#   git-wip "fix login"  # custom message: "WIP: fix login"
+#   git-wip -a           # amend the last commit if it was a WIP
+
+set -euo pipefail
+
+# Check if we're in a git repository
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Error: Not a git repository." >&2
+  exit 1
+fi
+
+# Default message
+DEFAULT_MESSAGE="WIP: quick save"
+
+# If first argument is -a or --amend, amend the last commit
+if [[ "${1:-}" == "-a" || "${1:-}" == "--amend" ]]; then
+  shift
+  if git log -1 --pretty=%B | grep -q "^WIP:"; then
+    CUSTOM_MESSAGE="${*:-$DEFAULT_MESSAGE}"
+    git add -A
+    git commit --amend --no-edit --message "WIP: $CUSTOM_MESSAGE"
+    echo "Amended last WIP commit: WIP: $CUSTOM_MESSAGE"
+  else
+    echo "Last commit is not a WIP commit. Use 'git-wip' to create a new one." >&2
+    exit 1
+  fi
+  exit 0
+fi
+
+# Normal flow: create a new WIP commit
+CUSTOM_MESSAGE="${*:-$DEFAULT_MESSAGE}"
+
+# Stage everything: modified, deleted, and untracked files
+git add -A
+
+# Check if there are any changes to commit
+if git diff --cached --quiet; then
+  echo "No changes to commit."
+  exit 0
+fi
+
+# Create the commit
+git commit --message "WIP: $CUSTOM_MESSAGE"
+
+echo "Saved work in progress: WIP: $CUSTOM_MESSAGE"
+echo "To undo: git reset --soft HEAD~1"
+echo "To amend: git-wip -a [new message]"
